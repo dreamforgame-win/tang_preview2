@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import SLGFormation from '@/components/slg-formation';
 import SLGMap from '@/components/slg-map';
 import { strategiesData } from '@/data/strategies';
@@ -32,7 +33,7 @@ export default function Home() {
         {/* Player Info */}
         <div className="flex items-center gap-3 pointer-events-auto">
           <div className="w-14 h-14 rounded-full border-2 border-[#8b6b4a] overflow-hidden shadow-[0_0_10px_rgba(0,0,0,0.8)] relative">
-            <img src="https://picsum.photos/seed/avatar/100/100" className="w-full h-full object-cover" />
+            <Image src="https://picsum.photos/seed/avatar/100/100" alt="Avatar" fill className="object-cover" unoptimized />
             <div className="absolute bottom-0 left-0 right-0 bg-red-800/80 text-[10px] text-center text-white">Lv.35</div>
           </div>
           <div className="flex flex-col text-xs text-[#d4b484] drop-shadow-[0_1px_2px_rgba(0,0,0,1)]">
@@ -269,7 +270,7 @@ const SideIconButton = ({ icon }: { icon: React.ReactNode }) => (
 
 const TroopAvatar = ({ img, hp, type }: { img: string, hp: number, type: string }) => (
   <div className="w-12 h-12 rounded-full border-2 border-slate-400 overflow-hidden relative cursor-pointer hover:border-white transition-colors shadow-lg">
-    <img src={img} className="w-full h-full object-cover" />
+    <Image src={img} alt="Troop" fill className="object-cover" unoptimized />
     <div className="absolute top-0 left-0 bg-blue-900/80 text-white text-[10px] px-1 rounded-br-sm border-b border-r border-blue-400/50">
       {type}
     </div>

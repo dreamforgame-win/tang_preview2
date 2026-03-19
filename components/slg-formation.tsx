@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { Undo2, X, Trash2 } from 'lucide-react';
 import { heroesData, Hero } from '@/data/heroes';
 import { strategiesData, Strategy } from '@/data/strategies';
@@ -188,6 +189,14 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
   const [isOverRemoveZone, setIsOverRemoveZone] = useState(false);
   const [selectedBuffs, setSelectedBuffs] = useState<{heroName: string, formationBuff?: string, strategyBuffs?: string[]} | null>(null);
   const [noTargetModal, setNoTargetModal] = useState<{show: boolean, stratName: string}>({show: false, stratName: ''});
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [dragOverSlotIndex, setDragOverSlotIndex] = useState<number | null>(null);
+  const [pendingHeroDrop, setPendingHeroDrop] = useState<{
+    heroId: number;
+    slotIndex: number;
+    oldTroopIndex: number;
+    sourceIndex: number;
+  } | null>(null);
   
   // Interaction states
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
@@ -212,6 +221,37 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
   const [troopFormations, setTroopFormations] = useState<number[]>(
     Array(5).fill(1001)
   );
+
+  // Initial load effect
+  useEffect(() => {
+    const loadData = async () => {
+      const savedData = localStorage.getItem('slg_formation_save');
+      if (savedData) {
+        try {
+          const parsed = JSON.parse(savedData);
+          if (parsed.formations) setFormations(parsed.formations);
+          if (parsed.strategyFormations) setStrategyFormations(parsed.strategyFormations);
+          if (parsed.troopFormations) setTroopFormations(parsed.troopFormations);
+        } catch (e) {
+          console.error('Failed to parse save data', e);
+        }
+      }
+      setIsLoaded(true);
+    };
+    loadData();
+  }, []);
+
+  // Auto-save effect
+  useEffect(() => {
+    if (!isLoaded) return;
+    
+    const saveData = {
+      formations,
+      strategyFormations,
+      troopFormations
+    };
+    localStorage.setItem('slg_formation_save', JSON.stringify(saveData));
+  }, [formations, strategyFormations, troopFormations, isLoaded]);
 
   const handleDragStartHero = (e: React.DragEvent, heroId: number, sourceIndex?: number) => {
     setIsDragging(true);
@@ -272,11 +312,16 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
     setIsDragging(false);
     setIsDraggingFromGrid(false);
     setIsOverRemoveZone(false);
+    setDragOverSlotIndex(null);
   };
 
   const handleDrop = (e: React.DragEvent, slotIndex: number) => {
     e.preventDefault();
     setIsDragging(false);
+    setIsDraggingFromGrid(false);
+    setIsOverRemoveZone(false);
+    setDragOverSlotIndex(null);
+    
     const heroIdStr = e.dataTransfer.getData('heroId');
     const strategyIdStr = e.dataTransfer.getData('strategyId');
     const sourceIndexStr = e.dataTransfer.getData('sourceIndex');
@@ -284,55 +329,114 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
 
     if (heroIdStr) {
       const heroId = parseInt(heroIdStr, 10);
-      setFormations(prev => {
-        const newFormations = [...prev];
-        const currentFormation = [...newFormations[activeTroop]];
-        
-        // If swapping from another slot
-        if (sourceIndex !== -1 && sourceIndex !== slotIndex) {
-          const targetHeroId = currentFormation[slotIndex];
-          currentFormation[sourceIndex] = targetHeroId; // Swap or clear
-        } else {
-          // Remove hero from previous slot if already in formation but not from a slot drag
-          const existingIndex = currentFormation.indexOf(heroId);
-          if (existingIndex !== -1 && existingIndex !== slotIndex) {
-            currentFormation[existingIndex] = null;
+      
+      // Check if hero is in another troop
+      let oldTroopIndex = -1;
+      if (sourceIndex === -1) {
+        for (let i = 0; i < formations.length; i++) {
+          if (i !== activeTroop && formations[i].includes(heroId)) {
+            oldTroopIndex = i;
+            break;
           }
         }
-        
-        // Place hero in new slot
-        currentFormation[slotIndex] = heroId;
-        newFormations[activeTroop] = currentFormation;
-        return newFormations;
-      });
+      }
+
+      if (oldTroopIndex !== -1) {
+        setPendingHeroDrop({ heroId, slotIndex, oldTroopIndex, sourceIndex });
+        return;
+      }
+
+      executeHeroDrop(heroId, slotIndex, sourceIndex);
     } else if (strategyIdStr) {
       const strategyId = parseInt(strategyIdStr, 10);
-      setStrategyFormations(prev => {
-        const newFormations = [...prev];
-        const currentFormation = [...newFormations[activeTroop]];
-        
-        // If swapping from another slot
-        if (sourceIndex !== -1 && sourceIndex !== slotIndex) {
-          const targetStrategyId = currentFormation[slotIndex];
-          currentFormation[sourceIndex] = targetStrategyId; // Swap or clear
-        } else {
-          // Remove strategy from previous slot if already in formation
-          const existingIndex = currentFormation.indexOf(strategyId);
-          if (existingIndex !== -1 && existingIndex !== slotIndex) {
-            currentFormation[existingIndex] = null;
-          }
-        }
-        
-        // Place strategy in new slot
-        currentFormation[slotIndex] = strategyId;
-        newFormations[activeTroop] = currentFormation;
-        return newFormations;
-      });
+      executeStrategyDrop(strategyId, slotIndex, sourceIndex);
     }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const executeHeroDrop = (heroId: number, slotIndex: number, sourceIndex: number, oldTroopIndex: number = -1) => {
+    let newStrategyFormations = [...strategyFormations.map(f => [...f])];
+    let newFormations = [...formations.map(f => [...f])];
+
+    // Remove from old troop if confirmed
+    if (oldTroopIndex !== -1) {
+      const existingIndex = newFormations[oldTroopIndex].indexOf(heroId);
+      if (existingIndex !== -1) {
+        newFormations[oldTroopIndex][existingIndex] = null;
+      }
+    }
+
+    const targetHeroId = newFormations[activeTroop][slotIndex];
+    const targetStrategyId = newStrategyFormations[activeTroop][slotIndex];
+
+    if (sourceIndex !== -1 && sourceIndex !== slotIndex) {
+      // Swap within same troop
+      newFormations[activeTroop][sourceIndex] = targetHeroId;
+      if (targetStrategyId) {
+        newStrategyFormations[activeTroop][sourceIndex] = targetStrategyId;
+        newStrategyFormations[activeTroop][slotIndex] = null;
+      }
+    } else if (sourceIndex === -1) {
+      // From list
+      if (targetStrategyId) {
+        newStrategyFormations[activeTroop][slotIndex] = null;
+      }
+      // Remove hero from ANY troop if dragged from list
+      for (let i = 0; i < newFormations.length; i++) {
+        const existingIndex = newFormations[i].indexOf(heroId);
+        if (existingIndex !== -1) {
+          newFormations[i][existingIndex] = null;
+        }
+      }
+    }
+    
+    newFormations[activeTroop][slotIndex] = heroId;
+    
+    setFormations(newFormations);
+    setStrategyFormations(newStrategyFormations);
+  };
+
+  const executeStrategyDrop = (strategyId: number, slotIndex: number, sourceIndex: number) => {
+    let newStrategyFormations = [...strategyFormations.map(f => [...f])];
+    let newFormations = [...formations.map(f => [...f])];
+
+    const targetStrategyId = newStrategyFormations[activeTroop][slotIndex];
+    const targetHeroId = newFormations[activeTroop][slotIndex];
+
+    if (sourceIndex !== -1 && sourceIndex !== slotIndex) {
+      // Swap within same troop
+      newStrategyFormations[activeTroop][sourceIndex] = targetStrategyId;
+      if (targetHeroId) {
+        newFormations[activeTroop][sourceIndex] = targetHeroId;
+        newFormations[activeTroop][slotIndex] = null;
+      }
+    } else if (sourceIndex === -1) {
+      // From list
+      // Remove strategy from ANY troop if dragged from list
+      for (let i = 0; i < newStrategyFormations.length; i++) {
+        const existingIndex = newStrategyFormations[i].indexOf(strategyId);
+        if (existingIndex !== -1) {
+          newStrategyFormations[i][existingIndex] = null;
+        }
+      }
+      if (targetHeroId) {
+        newFormations[activeTroop][slotIndex] = null;
+      }
+    }
+    
+    newStrategyFormations[activeTroop][slotIndex] = strategyId;
+    
+    setFormations(newFormations);
+    setStrategyFormations(newStrategyFormations);
+  };
+
+  const handleDragOver = (e: React.DragEvent, slotIndex: number) => {
     e.preventDefault();
+    setDragOverSlotIndex(slotIndex);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverSlotIndex(null);
   };
 
   const handleRemoveHero = (slotIndex: number) => {
@@ -356,6 +460,12 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
   };
 
   const handleRemoveDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    setIsDraggingFromGrid(false);
+    setIsOverRemoveZone(false);
+    setDragOverSlotIndex(null);
+    
     const sourceIndexStr = e.dataTransfer.getData('sourceIndex');
     const heroIdStr = e.dataTransfer.getData('heroId');
     const strategyIdStr = e.dataTransfer.getData('strategyId');
@@ -545,29 +655,33 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
     <div className="w-[956px] h-[460px] relative text-slate-200 font-sans flex flex-col select-none overflow-hidden shadow-2xl mx-auto border border-slate-700/60 rounded-sm bg-slate-900">
       {/* Background Image with Cold Ink Wash Overlay */}
       <div className="absolute inset-0 z-0 pointer-events-none">
-        <img
+        <Image
           src="https://picsum.photos/seed/misty-mountain/1000/500?grayscale"
-          className="w-full h-full object-cover opacity-30 mix-blend-luminosity"
+          className="object-cover opacity-30 mix-blend-luminosity"
           alt="background"
+          fill
+          unoptimized
         />
         <div className="absolute inset-0 bg-gradient-to-br from-[#0f172a]/95 via-[#1e293b]/85 to-[#0f172a]/95"></div>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(30,58,138,0.15)_0%,transparent_70%)]"></div>
       </div>
 
       {/* Header */}
-      <div className="h-[48px] flex items-center px-4 bg-gradient-to-r from-slate-900/90 to-transparent z-10 border-b border-slate-700/50 shadow-sm shrink-0">
-        <Undo2 
-          className="w-6 h-6 mr-3 cursor-pointer text-slate-400 hover:text-slate-100 transition-colors" 
-          strokeWidth={2} 
-          onClick={onClose}
-        />
-        <span className="text-[18px] tracking-widest font-serif text-slate-200">编队</span>
+      <div className="h-[48px] flex items-center justify-between px-4 bg-gradient-to-r from-slate-900/90 to-transparent z-10 border-b border-slate-700/50 shadow-sm shrink-0">
+        <div className="flex items-center">
+          <Undo2 
+            className="w-6 h-6 mr-3 cursor-pointer text-slate-400 hover:text-slate-100 transition-colors" 
+            strokeWidth={2} 
+            onClick={onClose}
+          />
+          <span className="text-[18px] tracking-widest font-serif text-slate-200">编队</span>
+        </div>
       </div>
 
       <div className="flex flex-1 z-20 overflow-hidden">
         {/* Sidebar */}
         <div className="w-[180px] flex flex-col pt-4 bg-slate-900/40 backdrop-blur-sm border-r border-slate-800/50 shrink-0">
-          {['部队一', '部队二', '部队三', '部队四', '部队五'].map((item, index) => (
+          {['阵容一', '阵容二', '阵容三', '阵容四', '阵容五'].map((item, index) => (
             <div
               key={item}
               onClick={() => setActiveTroop(index)}
@@ -669,12 +783,18 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
                     key={i}
                     onClick={() => handleSlotClick(i)}
                     onDrop={(e) => handleDrop(e, i)}
-                    onDragOver={handleDragOver}
+                    onDragOver={(e) => handleDragOver(e, i)}
+                    onDragLeave={handleDragLeave}
                     className={`w-full h-full bg-slate-800/50 border rounded-sm shadow-[inset_0_0_20px_rgba(0,0,0,0.6),0_10px_15px_rgba(0,0,0,0.4)] hover:border-blue-400/80 hover:shadow-[inset_0_0_30px_rgba(59,130,246,0.4),0_15px_25px_rgba(0,0,0,0.5)] transition-all duration-300 cursor-pointer relative group flex items-center justify-center ${selectedGridSlot === i ? 'border-green-400/80' : 'border-slate-500/50'}`}
                     style={{ transformStyle: 'preserve-3d' }}
                   >
                     {/* Grid floor pattern */}
                     <div className="absolute inset-0 bg-[linear-gradient(0deg,transparent_48%,rgba(148,163,184,0.1)_49%,rgba(148,163,184,0.1)_51%,transparent_52%),linear-gradient(90deg,transparent_48%,rgba(148,163,184,0.1)_49%,rgba(148,163,184,0.1)_51%,transparent_52%)] bg-[length:16px_16px]"></div>
+                    
+                    {/* Drag Over Highlight */}
+                    {dragOverSlotIndex === i && (
+                      <div className="absolute inset-0 bg-blue-500/40 z-0 pointer-events-none shadow-[inset_0_0_20px_rgba(59,130,246,0.6)] animate-pulse"></div>
+                    )}
                     
                     {/* Active Formation Slot Highlight */}
                     {isActiveSlot && (
@@ -768,7 +888,7 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
                           onDragStart={(e) => handleDragStartHero(e, hero.id, i)}
                           onDragEnd={handleDragEnd}
                         >
-                          <img src={hero.资源路径} alt={hero.name} className="w-[52px] h-[52px] object-cover rounded-full border-2 border-blue-400 shadow-[0_10px_20px_rgba(0,0,0,0.6)] cursor-grab active:cursor-grabbing" />
+                          <Image src={hero.资源路径} alt={hero.name} width={52} height={52} className="w-[52px] h-[52px] object-cover rounded-full border-2 border-blue-400 shadow-[0_10px_20px_rgba(0,0,0,0.6)] cursor-grab active:cursor-grabbing" unoptimized />
                           <div className="absolute bottom-[-6px] z-10 flex items-center gap-0.5 drop-shadow-lg bg-slate-900/90 px-1.5 py-0.5 rounded border border-slate-700/50 whitespace-nowrap">
                             <span className="text-[8px] text-amber-200/90 bg-black/50 px-0.5 rounded-sm">{hero.兵种页签.charAt(0)}</span>
                             <span className="text-[8px] text-amber-200/90 bg-black/50 px-0.5 rounded-sm">{hero.战斗页签.charAt(0)}</span>
@@ -879,8 +999,8 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
                       ) : (
                         deployedHeroes.map((hero, i) => (
                           <div key={i} className="flex items-center gap-3 group shrink-0">
-                            <div className="w-[36px] h-[36px] bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 flex overflow-hidden items-center justify-center shadow-inner rounded-sm shrink-0">
-                              <img src={hero.资源路径} alt={hero.name} className="w-full h-full object-cover" />
+                            <div className="w-[36px] h-[36px] bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 flex overflow-hidden items-center justify-center shadow-inner rounded-sm shrink-0 relative">
+                              <Image src={hero.资源路径} alt={hero.name} fill className="object-cover" unoptimized />
                             </div>
                             <div className="w-[56px] h-[26px] bg-slate-900/90 border border-slate-700 flex items-center justify-center text-[14px] text-blue-200 font-mono shadow-inner rounded-sm shrink-0">
                               {hero['兵力(HP)']}
@@ -897,23 +1017,40 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
 
                 {activeTab === '武将' && (
                   <div className="flex-1 overflow-x-auto overflow-y-hidden flex gap-[10px] pb-2 custom-scrollbar items-start pt-2 pr-4">
-                    {heroesData.map(hero => {
-                      const isDeployed = formations[activeTroop].includes(hero.id);
+                    {[...heroesData].sort((a, b) => {
+                      const aDeployed = formations.findIndex(f => f.includes(a.id)) !== -1;
+                      const bDeployed = formations.findIndex(f => f.includes(b.id)) !== -1;
+                      if (aDeployed && !bDeployed) return 1;
+                      if (!aDeployed && bDeployed) return -1;
+                      return 0;
+                    }).map(hero => {
+                      const deployedTroopIndex = formations.findIndex(f => f.includes(hero.id));
+                      const isDeployed = deployedTroopIndex !== -1;
+                      const isDeployedInCurrent = deployedTroopIndex === activeTroop;
                       let frameUrl = 'https://cdn.jsdelivr.net/gh/dreamforgame-win/slg-assets@main/UI/tex_frm_lan.png';
                       if (hero.稀有度 === '名将') frameUrl = 'https://cdn.jsdelivr.net/gh/dreamforgame-win/slg-assets@main/UI/tex_frm_cheng.png';
                       else if (hero.稀有度 === '良将') frameUrl = 'https://cdn.jsdelivr.net/gh/dreamforgame-win/slg-assets@main/UI/tex_frm_zi.png';
 
+                      const troopNames = ['阵容一', '阵容二', '阵容三', '阵容四', '阵容五'];
+
                       return (
                         <div
                           key={hero.id}
-                          draggable={!isDeployed}
+                          draggable={!isDeployedInCurrent}
                           onDragStart={(e) => handleDragStartHero(e, hero.id)}
                           onDragEnd={handleDragEnd}
-                          className={`w-[80px] shrink-0 flex flex-col items-center ${isDeployed ? 'opacity-40 grayscale cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:-translate-y-2 transition-transform'}`}
+                          className={`w-[80px] shrink-0 flex flex-col items-center ${isDeployedInCurrent ? 'opacity-40 grayscale cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:-translate-y-2 transition-transform'}`}
                         >
                           <div className="w-[80px] h-[120px] rounded-sm overflow-hidden shadow-lg relative bg-slate-800">
-                            <img src={hero.资源路径} alt={hero.name} className="absolute inset-0 w-full h-full object-cover" />
-                            <img src={frameUrl} alt="frame" className="absolute inset-0 w-full h-full object-fill z-10 pointer-events-none" />
+                            <Image src={hero.资源路径} alt={hero.name} fill className="object-cover" unoptimized />
+                            <Image src={frameUrl} alt="frame" fill className="object-fill z-10 pointer-events-none" unoptimized />
+                            
+                            {/* Deployed Indicator */}
+                            {isDeployed && (
+                              <div className="absolute top-0 left-0 right-0 bg-black/70 text-amber-400 text-[10px] text-center py-0.5 z-30 font-bold border-b border-amber-500/30 backdrop-blur-sm">
+                                {troopNames[deployedTroopIndex]}
+                              </div>
+                            )}
                             
                             <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-1.5 pt-6 bg-gradient-to-t from-black/90 via-black/50 to-transparent">
                               <div className="flex gap-1 text-[10px] text-amber-100/90 leading-none mb-1">
@@ -931,8 +1068,16 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
 
                 {activeTab === '军略' && (
                   <div className="flex-1 overflow-x-auto overflow-y-hidden flex gap-[10px] pb-2 custom-scrollbar items-start pt-2 pr-4">
-                    {strategiesData.map(strat => {
-                      const isDeployed = strategyFormations[activeTroop].includes(strat.id);
+                    {[...strategiesData].sort((a, b) => {
+                      const aDeployed = strategyFormations.findIndex(f => f.includes(a.id)) !== -1;
+                      const bDeployed = strategyFormations.findIndex(f => f.includes(b.id)) !== -1;
+                      if (aDeployed && !bDeployed) return 1;
+                      if (!aDeployed && bDeployed) return -1;
+                      return 0;
+                    }).map(strat => {
+                      const deployedTroopIndex = strategyFormations.findIndex(f => f.includes(strat.id));
+                      const isDeployed = deployedTroopIndex !== -1;
+                      const isDeployedInCurrent = deployedTroopIndex === activeTroop;
                       
                       let borderColor = 'border-blue-500/50';
                       let bgColor = 'from-blue-900/40 to-slate-900';
@@ -947,17 +1092,26 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
                         textColor = 'text-purple-400';
                       }
 
+                      const troopNames = ['阵容一', '阵容二', '阵容三', '阵容四', '阵容五'];
+
                       return (
                         <div
                           key={strat.id}
-                          draggable={!isDeployed}
+                          draggable={!isDeployedInCurrent}
                           onDragStart={(e) => handleDragStartStrategy(e, strat.id)}
                           onDragEnd={handleDragEnd}
                           onClick={() => setSelectedStrategy(strat)}
-                          className={`w-[80px] shrink-0 flex flex-col items-center ${isDeployed ? 'opacity-40 grayscale cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:-translate-y-2 transition-transform'}`}
+                          className={`w-[80px] shrink-0 flex flex-col items-center ${isDeployedInCurrent ? 'opacity-40 grayscale cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:-translate-y-2 transition-transform'}`}
                         >
                           <div className={`w-[80px] h-[120px] rounded-sm overflow-hidden shadow-lg relative bg-gradient-to-b ${bgColor} border ${borderColor} flex flex-col items-center p-1.5`}>
-                            <div className={`text-[11px] ${textColor} mb-1 w-full text-center border-b border-white/10 pb-1 font-bold truncate`}>{strat.名称}</div>
+                            {/* Deployed Indicator */}
+                            {isDeployed && (
+                              <div className="absolute top-0 left-0 right-0 bg-black/70 text-amber-400 text-[10px] text-center py-0.5 z-30 font-bold border-b border-amber-500/30 backdrop-blur-sm">
+                                {troopNames[deployedTroopIndex]}
+                              </div>
+                            )}
+                            
+                            <div className={`text-[11px] ${textColor} mb-1 w-full text-center border-b border-white/10 pb-1 font-bold truncate ${isDeployed ? 'mt-4' : ''}`}>{strat.名称}</div>
                             <div className="flex-1 w-full flex items-center justify-center">
                               <div className="grid grid-cols-3 gap-[2px] w-[42px] h-[42px]">
                                 {Array.from({length: 9}).map((_, i) => {
@@ -1003,6 +1157,35 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
           </div>
         </div>
       </div>
+
+      {/* Hero Deployment Confirmation Modal */}
+      {pendingHeroDrop && (
+        <div className="absolute inset-0 z-50 bg-black/60 flex items-center justify-center backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-600 rounded-lg shadow-2xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold text-slate-200 mb-4">阵容冲突</h3>
+            <p className="text-slate-300 mb-6 leading-relaxed">
+              【{heroesData.find(h => h.id === pendingHeroDrop.heroId)?.name}】已经上阵到【阵容{['一', '二', '三', '四', '五'][pendingHeroDrop.oldTroopIndex]}】，此操作会取消其在【阵容{['一', '二', '三', '四', '五'][pendingHeroDrop.oldTroopIndex]}】的放置状态。
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setPendingHeroDrop(null)}
+                className="px-4 py-2 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  executeHeroDrop(pendingHeroDrop.heroId, pendingHeroDrop.slotIndex, pendingHeroDrop.sourceIndex, pendingHeroDrop.oldTroopIndex);
+                  setPendingHeroDrop(null);
+                }}
+                className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-500 transition-colors shadow-[0_0_15px_rgba(37,99,235,0.4)]"
+              >
+                确认
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Formation Selection Modal */}
       {showFormationModal && (
@@ -1190,6 +1373,7 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
           background: rgba(100, 116, 139, 1);
         }
       `}} />
+
       {/* No Target Modal */}
       {noTargetModal.show && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
