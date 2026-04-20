@@ -5,6 +5,8 @@ import Image from 'next/image';
 import { Undo2, X, Trash2 } from 'lucide-react';
 import { heroesData, Hero } from '@/data/heroes';
 import { strategiesData, Strategy } from '@/data/strategies';
+import HeroCard from './hero-card';
+import SLGHeroDetail from './slg-hero-detail';
 
 const formationsData = [
     {
@@ -202,6 +204,10 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
   const [pressingStrategyId, setPressingStrategyId] = useState<number | null>(null);
   const [pressProgress, setPressProgress] = useState(0);
+  
+  const [pressingHeroId, setPressingHeroId] = useState<number | null>(null);
+  const [heroPressProgress, setHeroPressProgress] = useState(0);
+  const [selectedHeroDetail, setSelectedHeroDetail] = useState<Hero | null>(null);
   
   // Selection states for connections
   const [selectedGridSlot, setSelectedGridSlot] = useState<number | null>(null);
@@ -487,7 +493,7 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
     .map(id => heroesData.find(h => h.id === id))
     .filter((h): h is Hero => h !== undefined);
 
-  const totalTroops = deployedHeroes.reduce((sum, hero) => sum + hero['兵力(HP)'], 0);
+  const totalTroops = deployedHeroes.reduce((sum, hero) => sum + 100, 0); // Level 1 HP
 
   const currentFormId = troopFormations[activeTroop];
   const currentFormData = formationsData.find(f => f.阵法id === currentFormId)!;
@@ -649,6 +655,33 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
     }
     setPressingStrategyId(null);
     setPressProgress(0);
+  };
+
+  const handleHeroPointerDown = (hero: Hero, index: number) => {
+    setPressingHeroId(index);
+    setHeroPressProgress(0);
+    
+    let progress = 0;
+    const interval = setInterval(() => {
+      progress += 10;
+      setHeroPressProgress(progress);
+      if (progress >= 100) {
+        clearInterval(interval);
+        setSelectedHeroDetail(hero);
+        setPressingHeroId(null);
+        setHeroPressProgress(0);
+      }
+    }, 50);
+    setLongPressTimer(interval);
+  };
+
+  const handleHeroPointerUp = () => {
+    if (longPressTimer) {
+      clearInterval(longPressTimer);
+      setLongPressTimer(null);
+    }
+    setPressingHeroId(null);
+    setHeroPressProgress(0);
   };
 
   return (
@@ -883,12 +916,44 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
                         style={{ transform: 'translateZ(40px) rotateX(-55deg) translateY(22px)' }}
                       >
                         <div 
-                          className="relative group/hero pointer-events-auto flex flex-col items-center"
+                          className="relative group/hero pointer-events-auto flex flex-col items-center w-[52px] h-[52px]"
                           draggable
-                          onDragStart={(e) => handleDragStartHero(e, hero.id, i)}
+                          onDragStart={(e) => {
+                            handleHeroPointerUp();
+                            handleDragStartHero(e, hero.id, i);
+                          }}
                           onDragEnd={handleDragEnd}
+                          onPointerDown={() => handleHeroPointerDown(hero, i)}
+                          onPointerUp={handleHeroPointerUp}
+                          onPointerLeave={handleHeroPointerUp}
                         >
                           <Image src={hero.资源路径} alt={hero.name} width={52} height={52} className="w-[52px] h-[52px] object-cover rounded-full border-2 border-blue-400 shadow-[0_10px_20px_rgba(0,0,0,0.6)] cursor-grab active:cursor-grabbing" unoptimized />
+                          
+                          {/* Long press progress ring for hero */}
+                          {pressingHeroId === i && (
+                            <svg className="absolute inset-0 w-[52px] h-[52px] -rotate-90 pointer-events-none" style={{ top: 0, left: 0 }}>
+                              <circle
+                                cx="26"
+                                cy="26"
+                                r="24"
+                                fill="none"
+                                stroke="rgba(255, 255, 255, 0.2)"
+                                strokeWidth="4"
+                              />
+                              <circle
+                                cx="26"
+                                cy="26"
+                                r="24"
+                                fill="none"
+                                stroke="rgba(59, 130, 246, 0.8)"
+                                strokeWidth="4"
+                                strokeDasharray={`${2 * Math.PI * 24}`}
+                                strokeDashoffset={`${2 * Math.PI * 24 * (1 - heroPressProgress / 100)}`}
+                                className="transition-all duration-75"
+                              />
+                            </svg>
+                          )}
+
                           <div className="absolute bottom-[-6px] z-10 flex items-center gap-0.5 drop-shadow-lg bg-slate-900/90 px-1.5 py-0.5 rounded border border-slate-700/50 whitespace-nowrap">
                             <span className="text-[8px] text-amber-200/90 bg-black/50 px-0.5 rounded-sm">{hero.兵种页签.charAt(0)}</span>
                             <span className="text-[8px] text-amber-200/90 bg-black/50 px-0.5 rounded-sm">{hero.战斗页签.charAt(0)}</span>
@@ -999,11 +1064,14 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
                       ) : (
                         deployedHeroes.map((hero, i) => (
                           <div key={i} className="flex items-center gap-3 group shrink-0">
-                            <div className="w-[36px] h-[36px] bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 flex overflow-hidden items-center justify-center shadow-inner rounded-sm shrink-0 relative">
+                            <div 
+                              className="w-[36px] h-[36px] bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 flex overflow-hidden items-center justify-center shadow-inner rounded-sm shrink-0 relative cursor-pointer hover:border-blue-400 transition-colors"
+                              onClick={() => setSelectedHeroDetail(hero)}
+                            >
                               <Image src={hero.资源路径} alt={hero.name} fill className="object-cover" unoptimized />
                             </div>
                             <div className="w-[56px] h-[26px] bg-slate-900/90 border border-slate-700 flex items-center justify-center text-[14px] text-blue-200 font-mono shadow-inner rounded-sm shrink-0">
-                              {hero['兵力(HP)']}
+                              {100}
                             </div>
                             <div className="flex-1 h-[4px] bg-slate-900 rounded-full relative overflow-hidden border border-slate-800">
                               <div className="absolute left-0 top-0 h-full bg-gradient-to-r from-blue-600 to-cyan-400 w-full shadow-[0_0_8px_rgba(34,211,238,0.5)]"></div>
@@ -1027,40 +1095,22 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
                       const deployedTroopIndex = formations.findIndex(f => f.includes(hero.id));
                       const isDeployed = deployedTroopIndex !== -1;
                       const isDeployedInCurrent = deployedTroopIndex === activeTroop;
-                      let frameUrl = 'https://cdn.jsdelivr.net/gh/dreamforgame-win/slg-assets@main/UI/tex_frm_lan.png';
-                      if (hero.稀有度 === '名将') frameUrl = 'https://cdn.jsdelivr.net/gh/dreamforgame-win/slg-assets@main/UI/tex_frm_cheng.png';
-                      else if (hero.稀有度 === '良将') frameUrl = 'https://cdn.jsdelivr.net/gh/dreamforgame-win/slg-assets@main/UI/tex_frm_zi.png';
 
                       const troopNames = ['阵容一', '阵容二', '阵容三', '阵容四', '阵容五'];
 
                       return (
-                        <div
+                        <HeroCard
                           key={hero.id}
+                          hero={hero}
+                          isDeployed={isDeployed}
+                          deployedText={isDeployed ? troopNames[deployedTroopIndex] : undefined}
                           draggable={!isDeployedInCurrent}
                           onDragStart={(e) => handleDragStartHero(e, hero.id)}
                           onDragEnd={handleDragEnd}
-                          className={`w-[80px] shrink-0 flex flex-col items-center ${isDeployedInCurrent ? 'opacity-40 grayscale cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:-translate-y-2 transition-transform'}`}
-                        >
-                          <div className="w-[80px] h-[120px] rounded-sm overflow-hidden shadow-lg relative bg-slate-800">
-                            <Image src={hero.资源路径} alt={hero.name} fill className="object-cover" unoptimized />
-                            <Image src={frameUrl} alt="frame" fill className="object-fill z-10 pointer-events-none" unoptimized />
-                            
-                            {/* Deployed Indicator */}
-                            {isDeployed && (
-                              <div className="absolute top-0 left-0 right-0 bg-black/70 text-amber-400 text-[10px] text-center py-0.5 z-30 font-bold border-b border-amber-500/30 backdrop-blur-sm">
-                                {troopNames[deployedTroopIndex]}
-                              </div>
-                            )}
-                            
-                            <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-1.5 pt-6 bg-gradient-to-t from-black/90 via-black/50 to-transparent">
-                              <div className="flex gap-1 text-[10px] text-amber-100/90 leading-none mb-1">
-                                <span className="bg-black/60 px-1 rounded-sm border border-white/20 shadow-sm">{hero.兵种页签.charAt(0)}</span>
-                                <span className="bg-black/60 px-1 rounded-sm border border-white/20 shadow-sm">{hero.战斗页签.charAt(0)}</span>
-                              </div>
-                              <span className="text-xs text-white font-bold truncate w-full text-center leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">{hero.name}</span>
-                            </div>
-                          </div>
-                        </div>
+                          onClick={() => setSelectedHeroDetail(hero)}
+                          className={`shrink-0 flex flex-col items-center ${isDeployedInCurrent ? 'opacity-40 grayscale cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:-translate-y-2 transition-transform'}`}
+                          cardClassName="shadow-lg"
+                        />
                       );
                     })}
                   </div>
@@ -1307,6 +1357,13 @@ export default function SLGFormation({ onClose }: { onClose?: () => void }) {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Hero Detail Modal */}
+      {selectedHeroDetail && (
+        <div className="absolute inset-0 z-[70] pointer-events-auto">
+          <SLGHeroDetail hero={selectedHeroDetail} onClose={() => setSelectedHeroDetail(null)} />
         </div>
       )}
       
