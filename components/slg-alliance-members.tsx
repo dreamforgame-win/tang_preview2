@@ -5,6 +5,7 @@ import { Undo2, Settings, LogOut, Plus, ChevronLeft, ChevronRight, X, Check } fr
 
 interface SLGAllianceMembersProps {
   onClose: () => void;
+  onLeaveAlliance?: () => void;
 }
 
 const PERMISSION_TYPES = [
@@ -31,7 +32,7 @@ const ALL_POSITIONS = [
   { id: 'gongbu_shilang', title: '工部侍郎' },
 ];
 
-export default function SLGAllianceMembers({ onClose }: SLGAllianceMembersProps) {
+export default function SLGAllianceMembers({ onClose, onLeaveAlliance }: SLGAllianceMembersProps) {
   const [view, setView] = useState<'list' | 'assign'>('list');
   const [members, setMembers] = useState(
     Array.from({ length: 10 }, (_, i) => ({
@@ -93,6 +94,7 @@ export default function SLGAllianceMembers({ onClose }: SLGAllianceMembersProps)
   const [selectingPos, setSelectingPos] = useState<string | null>(null);
   const [showPermissions, setShowPermissions] = useState(false);
   const [showApplications, setShowApplications] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   const [applications, setApplications] = useState([
     { id: 1, name: '玩家名称七个字', pro: '123456789', pos: '长安(123,123)' },
@@ -185,7 +187,11 @@ export default function SLGAllianceMembers({ onClose }: SLGAllianceMembersProps)
                   <div className="col-span-1 text-green-400">{m.group}</div>
                   <div className="col-span-1 text-green-400">{m.pos}</div>
                   <div className="col-span-1 cursor-pointer">
-                    <Settings size={18} />
+                    {m.name === '1024' ? (
+                      <LogOut size={18} className="text-[#ef4444] hover:text-[#f87171] transition-colors" onClick={() => setShowExitConfirm(true)} />
+                    ) : (
+                      <Settings size={18} className="text-gray-400 hover:text-white transition-colors" />
+                    )}
                   </div>
                 </div>
               ))}
@@ -404,6 +410,45 @@ export default function SLGAllianceMembers({ onClose }: SLGAllianceMembersProps)
                 className="bg-[#f69147] hover:bg-[#ea580c] text-white px-6 py-2 tracking-widest transition-colors rounded-sm"
               >
                 全部同意
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Exit Confirm Modal */}
+      {showExitConfirm && (
+        <div className="absolute inset-0 z-[130] bg-black/60 flex items-center justify-center p-8">
+          <div className="bg-[#4a5464] w-[400px] flex flex-col shadow-2xl relative border border-[#5c687a]">
+            {/* Header */}
+            <div className="text-center py-4 relative bg-[#4a5464] border-b border-[#363f4a] shrink-0">
+              <div className="text-white text-lg tracking-widest font-bold">提示</div>
+              <button onClick={() => setShowExitConfirm(false)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 bg-[#536173] p-8 text-center text-white tracking-widest">
+              是否退出同盟？
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-center gap-6 p-4 bg-[#4a5464] border-t border-[#363f4a] shrink-0">
+              <button 
+                onClick={() => setShowExitConfirm(false)}
+                className="bg-[#6b7280] hover:bg-[#4b5563] text-white px-8 py-2 tracking-widest transition-colors rounded-sm"
+              >
+                取消
+              </button>
+              <button 
+                onClick={() => {
+                  setShowExitConfirm(false);
+                  if (onLeaveAlliance) onLeaveAlliance();
+                }}
+                className="bg-[#ef4444] hover:bg-[#dc2626] text-white px-8 py-2 tracking-widest transition-colors rounded-sm"
+              >
+                确认
               </button>
             </div>
           </div>

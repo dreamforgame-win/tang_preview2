@@ -570,7 +570,15 @@ export default function Home() {
 
       {/* Alliance Members Overlay */}
       {showAllianceMembers && (
-        <SLGAllianceMembers onClose={() => setShowAllianceMembers(false)} />
+        <SLGAllianceMembers 
+          onClose={() => setShowAllianceMembers(false)} 
+          onLeaveAlliance={() => {
+            setHasAlliance(false);
+            localStorage.removeItem('slg_alliance_save');
+            setShowAllianceMembers(false);
+            setShowAllianceMain(false);
+          }}
+        />
       )}
 
       {/* Battle Reports Overlay */}
