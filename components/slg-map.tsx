@@ -50,7 +50,7 @@ const MarchingTroop = ({ troop, isSelected, onSelect }: { troop: TroopData, isSe
   useEffect(() => {
     if (troop.status !== '行军' || !troop.targetTile || !troop.startTime || !troop.endTime) return;
     
-    const routePoints = (troop.route || [{row: 6, col: 6}, {row: troop.targetTile.row, col: troop.targetTile.col}])
+    const routePoints = (troop.route || [{row: 6, col: 12}, {row: troop.targetTile.row, col: troop.targetTile.col}])
       .map(p => getTilePixelCenter(p.row, p.col));
 
     let totalLength = 0;
@@ -111,9 +111,9 @@ const MarchingTroop = ({ troop, isSelected, onSelect }: { troop: TroopData, isSe
 
   if (troop.status !== '行军' || !troop.targetTile || !troop.startTime || !troop.endTime) return null;
 
-  const startPixel = getTilePixelCenter(6, 6);
+  const startPixel = getTilePixelCenter(6, 12);
   
-  const routePoints = (troop.route || [{row: 6, col: 6}, {row: troop.targetTile.row, col: troop.targetTile.col}])
+  const routePoints = (troop.route || [{row: 6, col: 12}, {row: troop.targetTile.row, col: troop.targetTile.col}])
     .map(p => getTilePixelCenter(p.row, p.col));
 
   return (
@@ -200,11 +200,11 @@ const SLGMap = forwardRef<SLGMapRef, SLGMapProps>(({
 
   useImperativeHandle(ref, () => ({
     centerOnCity: () => {
-      centerOnTile(6, 6);
+      centerOnTile(6, 12);
     }
   }));
 
-  // Calculate distance to city center (6,6)
+  // Calculate distance to city center (6,12)
   useEffect(() => {
     if (!mapRef.current) return;
     const parentWidth = mapRef.current.parentElement?.clientWidth || 956;
@@ -226,8 +226,8 @@ const SLGMap = forwardRef<SLGMapRef, SLGMapProps>(({
       }
     }
 
-    // Distance in grid units to (6,6)
-    const gridDist = Math.floor(Math.sqrt(Math.pow(closestTile.row - 6, 2) + Math.pow(closestTile.col - 6, 2)));
+    // Distance in grid units to (6,12)
+    const gridDist = Math.floor(Math.sqrt(Math.pow(closestTile.row - 6, 2) + Math.pow(closestTile.col - 12, 2)));
     onDistanceChange?.(gridDist);
   }, [position, tiles, onDistanceChange]);
 
@@ -267,7 +267,7 @@ const SLGMap = forwardRef<SLGMapRef, SLGMapProps>(({
     if (mapRef.current) {
       const parentWidth = mapRef.current.parentElement?.clientWidth || 956;
       const parentHeight = mapRef.current.parentElement?.clientHeight || 460;
-      const target = getTilePixelCenter(6, 6);
+      const target = getTilePixelCenter(6, 12);
       // Use setTimeout to avoid synchronous setState in effect
       setTimeout(() => {
         setPosition({
@@ -408,8 +408,8 @@ const SLGMap = forwardRef<SLGMapRef, SLGMapProps>(({
               {getResourceUrl(type, level) && (
                 <div className="absolute inset-0 pointer-events-none">
                   {type === '主城' ? (
-                    // Only render the city image for the center tile (6,6) to cover the 7 tiles
-                    row === 6 && col === 6 && (
+                    // Only render the city image for the center tile (6,12) to cover the 7 tiles
+                    row === 6 && col === 12 && (
                       <div 
                         className="absolute left-1/2 top-1/2"
                         style={{ transform: 'translate(calc(-50% + 1px), calc(-50% - 20px))' }}

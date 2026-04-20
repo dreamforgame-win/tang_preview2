@@ -7,7 +7,7 @@ import SLGAllianceInvites from './slg-alliance-invites';
 
 interface SLGAllianceListProps {
   onClose: () => void;
-  onJoin: () => void;
+  onJoin: (flagData?: any) => void;
 }
 
 export default function SLGAllianceList({ onClose, onJoin }: SLGAllianceListProps) {
@@ -30,16 +30,18 @@ export default function SLGAllianceList({ onClose, onJoin }: SLGAllianceListProp
     },
     {
       id: 2,
-      name: '同盟名称1',
-      leader: '盟主名称七个字',
+      name: '六六六',
+      leader: '1024',
       level: 20,
-      members: 200,
-      maxMembers: 220,
-      state: '东吴',
-      power: '繁荣昌盛',
+      members: 50,
+      maxMembers: 200,
+      state: '中原',
+      power: '蒸蒸日上',
       status: 'applied'
     }
   ];
+
+  const filteredAlliances = alliances.filter(a => a.name.includes(searchQuery));
 
   return (
     <div className="absolute inset-0 z-[100] bg-[#8795a2] flex flex-col font-sans animate-in fade-in duration-300">
@@ -100,50 +102,59 @@ export default function SLGAllianceList({ onClose, onJoin }: SLGAllianceListProp
           </div>
         </div>
 
-        {/* Table Container */}
-        <div className="flex-1 bg-[#5c687a] overflow-hidden flex flex-col shadow-lg">
-          {/* Table Header */}
-          <div className="grid grid-cols-7 bg-[#2a2d36] text-[#bf9f73] font-medium py-3 px-6 text-sm text-center">
-            <div>同盟名称</div>
-            <div>盟主</div>
-            <div>等级</div>
-            <div>人数</div>
-            <div>出生州</div>
-            <div>实力指标</div>
-            <div>操作</div>
+        {/* Content based on Tab */}
+        {activeTab === '跨州' ? (
+          <div className="flex-1 bg-[#5c687a] overflow-hidden flex flex-col shadow-lg items-center justify-center">
+            <span className="text-gray-300 text-xl tracking-widest">赛季特定进程开放</span>
           </div>
+        ) : (
+          <div className="flex-1 bg-[#5c687a] overflow-hidden flex flex-col shadow-lg">
+            {/* Table Header */}
+            <div className="grid grid-cols-7 bg-[#2a2d36] text-[#bf9f73] font-medium py-3 px-6 text-sm text-center">
+              <div>同盟名称</div>
+              <div>盟主</div>
+              <div>等级</div>
+              <div>人数</div>
+              <div>出生州</div>
+              <div>实力指标</div>
+              <div>操作</div>
+            </div>
 
-          {/* Table Body */}
-          <div className="flex-1 overflow-y-auto">
-            {alliances.map((alliance) => (
-              <div 
-                key={alliance.id} 
-                className="grid grid-cols-7 items-center text-white py-4 px-6 text-sm text-center border-b border-[#2a2d36]/20 hover:bg-[#6c7a8e] transition-colors"
-              >
-                <div>{alliance.name}</div>
-                <div>{alliance.leader}</div>
-                <div>{alliance.level}</div>
-                <div>{alliance.members}/{alliance.maxMembers}</div>
-                <div>{alliance.state}</div>
-                <div className="text-[#4ade80]">{alliance.power}</div>
-                <div className="flex justify-center">
-                  {alliance.status === 'none' ? (
-                    <button 
-                      onClick={onJoin}
-                      className="bg-[#ef8133] hover:bg-[#f69147] text-white px-6 py-1.5 rounded-sm transition-colors text-sm"
-                    >
-                      申请加入
-                    </button>
-                  ) : (
-                    <button className="bg-[#ef4444] hover:bg-[#f87171] text-white px-6 py-1.5 rounded-sm transition-colors text-sm">
-                      取消申请
-                    </button>
-                  )}
+            {/* Table Body */}
+            <div className="flex-1 overflow-y-auto">
+              {filteredAlliances.map((alliance) => (
+                <div 
+                  key={alliance.id} 
+                  className="grid grid-cols-7 items-center text-white py-4 px-6 text-sm text-center border-b border-[#2a2d36]/20 hover:bg-[#6c7a8e] transition-colors"
+                >
+                  <div>{alliance.name}</div>
+                  <div>{alliance.leader}</div>
+                  <div>{alliance.level}</div>
+                  <div>{alliance.members}/{alliance.maxMembers}</div>
+                  <div>{alliance.state}</div>
+                  <div className="text-[#4ade80]">{alliance.power}</div>
+                  <div className="flex justify-center">
+                    {alliance.status === 'none' ? (
+                      <button 
+                        onClick={() => onJoin({ name: alliance.name, shortName: alliance.name.slice(0, 1) })}
+                        className="bg-[#ef8133] hover:bg-[#f69147] text-white px-6 py-1.5 rounded-sm transition-colors text-sm"
+                      >
+                        申请加入
+                      </button>
+                    ) : (
+                      <button className="bg-[#ef4444] hover:bg-[#f87171] text-white px-6 py-1.5 rounded-sm transition-colors text-sm">
+                        取消申请
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+              {filteredAlliances.length === 0 && (
+                <div className="text-center py-10 text-gray-400">未找到相关同盟</div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Bottom Action Buttons */}
         <div className="flex justify-end gap-3 mt-4">

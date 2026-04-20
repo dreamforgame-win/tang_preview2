@@ -15,12 +15,12 @@ function seededRandom(seed: number) {
 
 export const initialMapTiles: TileData[] = (() => {
   const initialTiles: TileData[] = [];
-  const mainCitySet = new Set(['6,5', '7,5', '5,6', '6,6', '7,6', '6,7', '7,7']);
+  const mainCitySet = new Set(['7,11', '6,11', '7,12', '6,12', '5,12', '7,13', '6,13']);
   
   // 1. Generate all required resource combinations (4 types * 9 levels, each 2-3 times)
   const resourceTypes = ['木材', '铁矿', '石头', '粮食'];
   const resourcePool: { type: string, level: number }[] = [];
-  let poolSeed = 54321; // Separate seed for pool generation
+  let poolSeed = 54322; // Separate seed for pool generation
   for (const type of resourceTypes) {
     for (let level = 1; level <= 9; level++) {
       // Add 2 to 3 instances of each combination
@@ -43,7 +43,7 @@ export const initialMapTiles: TileData[] = (() => {
   }
 
   // 3. Shuffle available coordinates using seeded random for determinism
-  let seed = 12345;
+  let seed = 12346;
   function seededShuffle<T>(array: T[]) {
     for (let i = array.length - 1; i > 0; i--) {
       const j = Math.floor(seededRandom(seed++) * (i + 1));

@@ -35,6 +35,9 @@ export default function Home() {
   const [showAllianceList, setShowAllianceList] = useState(false);
   const [showAllianceMain, setShowAllianceMain] = useState(false);
   const [showAllianceMembers, setShowAllianceMembers] = useState(false);
+  const [allianceFlag, setAllianceFlag] = useState<any>(null);
+  const [allianceName, setAllianceName] = useState<string>('');
+  const [allianceShortName, setAllianceShortName] = useState<string>('');
   const [hasAlliance, setHasAlliance] = useState(false);
   const [showCombat, setShowCombat] = useState(false);
   const [isReplay, setIsReplay] = useState(false);
@@ -117,7 +120,17 @@ export default function Home() {
   useEffect(() => {
     const savedAlliance = localStorage.getItem('slg_alliance_save');
     if (savedAlliance === 'true') {
-      setTimeout(() => setHasAlliance(true), 0);
+      setTimeout(() => {
+        setHasAlliance(true);
+        const savedFlag = localStorage.getItem('slg_alliance_flag');
+        if (savedFlag) {
+          setAllianceFlag(JSON.parse(savedFlag));
+        }
+        const savedName = localStorage.getItem('slg_alliance_name');
+        if (savedName) setAllianceName(savedName);
+        const savedShortName = localStorage.getItem('slg_alliance_short_name');
+        if (savedShortName) setAllianceShortName(savedShortName);
+      }, 0);
     }
   }, []);
 
@@ -220,7 +233,7 @@ export default function Home() {
 
   const handleAttack = React.useCallback((tile: TileData) => {
     setTargetTile(tile);
-    setPreviewRoute({ start: { row: 6, col: 6 }, end: { row: tile.row, col: tile.col } });
+    setPreviewRoute({ start: { row: 6, col: 12 }, end: { row: tile.row, col: tile.col } });
     setShowMarchSelection(true);
     setIsTestMarch(false);
   }, []);
@@ -235,11 +248,11 @@ export default function Home() {
   const handleMarch = React.useCallback((troopId: string, isTestMarch: boolean) => {
     if (!targetTile) return;
     
-    const distance = Math.abs(targetTile.row - 6) + Math.abs(targetTile.col - 6);
+    const distance = Math.abs(targetTile.row - 6) + Math.abs(targetTile.col - 12);
     const timeMs = isTestMarch ? 0 : distance * 5 * 1000;
     const now = Date.now();
     
-    const route = isTestMarch ? undefined : calculatePath({row: 6, col: 6}, {row: targetTile.row, col: targetTile.col}, 15);
+    const route = isTestMarch ? undefined : calculatePath({row: 6, col: 12}, {row: targetTile.row, col: targetTile.col}, 15);
 
     setTroops(prev => prev.map(t => {
       if (t.id === troopId) {
@@ -551,10 +564,22 @@ export default function Home() {
       {showAllianceList && (
         <SLGAllianceList 
           onClose={() => setShowAllianceList(false)} 
-          onJoin={() => {
+          onJoin={(data) => {
             setShowAllianceList(false);
             setHasAlliance(true);
             localStorage.setItem('slg_alliance_save', 'true');
+            if (data?.flagData) {
+              setAllianceFlag(data.flagData);
+              localStorage.setItem('slg_alliance_flag', JSON.stringify(data.flagData));
+            }
+            if (data?.name) {
+              setAllianceName(data.name);
+              localStorage.setItem('slg_alliance_name', data.name);
+            }
+            if (data?.shortName) {
+              setAllianceShortName(data.shortName);
+              localStorage.setItem('slg_alliance_short_name', data.shortName);
+            }
             setShowAllianceMain(true);
           }}
         />
@@ -565,6 +590,9 @@ export default function Home() {
         <SLGAllianceMain 
           onClose={() => setShowAllianceMain(false)}
           onOpenMembers={() => setShowAllianceMembers(true)}
+          flagData={allianceFlag}
+          allianceName={allianceName}
+          allianceShortName={allianceShortName}
         />
       )}
 
@@ -575,6 +603,12 @@ export default function Home() {
           onLeaveAlliance={() => {
             setHasAlliance(false);
             localStorage.removeItem('slg_alliance_save');
+            localStorage.removeItem('slg_alliance_flag');
+            localStorage.removeItem('slg_alliance_name');
+            localStorage.removeItem('slg_alliance_short_name');
+            setAllianceFlag(null);
+            setAllianceName('');
+            setAllianceShortName('');
             setShowAllianceMembers(false);
             setShowAllianceMain(false);
           }}

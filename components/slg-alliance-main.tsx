@@ -6,9 +6,12 @@ import { Undo2 } from 'lucide-react';
 interface SLGAllianceMainProps {
   onClose: () => void;
   onOpenMembers: () => void;
+  flagData?: any;
+  allianceName?: string;
+  allianceShortName?: string;
 }
 
-export default function SLGAllianceMain({ onClose, onOpenMembers }: SLGAllianceMainProps) {
+export default function SLGAllianceMain({ onClose, onOpenMembers, flagData, allianceName, allianceShortName }: SLGAllianceMainProps) {
   const [showTooltip, setShowTooltip] = React.useState<string | null>(null);
 
   const handleNotPlanned = () => {
@@ -24,6 +27,9 @@ export default function SLGAllianceMain({ onClose, onOpenMembers }: SLGAllianceM
     { label: '全资源加成', value: '5000/时' },
     { label: '势力值', value: '5000' },
   ];
+
+  const defaultFlag = { from: 'from-[#3a1d63]', to: 'to-[#24133c]', trim: 'border-amber-500/50' };
+  const flagStyle = flagData || defaultFlag;
 
   return (
     <div className="absolute inset-0 z-[100] bg-[#8795a2] flex flex-col font-sans animate-in fade-in duration-300">
@@ -58,13 +64,13 @@ export default function SLGAllianceMain({ onClose, onOpenMembers }: SLGAllianceM
                 <div className="absolute -right-1 top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-amber-500 rounded-full"></div>
               </div>
               {/* Banner Cloth */}
-              <div className="w-full h-[85px] bg-gradient-to-b from-[#3a1d63] to-[#24133c] relative z-10 border-x border-amber-500/50">
+              <div className={`w-full h-[85px] bg-gradient-to-b ${flagStyle.from} ${flagStyle.to} relative z-10 border-x ${flagStyle.trim}`}>
                   <div className="absolute bottom-0 left-0 w-full h-[30px] overflow-hidden">
                     {/* CSS chevron shape at bottom */}
-                    <div className="absolute w-[120%] h-[120%] bg-gradient-to-b from-[#3a1d63] to-[#24133c] border-b border-amber-500/50 rotate-45 transform origin-top-left -left-[20%] top-[40%]"></div>
+                    <div className={`absolute w-[120%] h-[120%] bg-gradient-to-b ${flagStyle.from} ${flagStyle.to} border-b ${flagStyle.trim} rotate-45 transform origin-top-left -left-[20%] top-[40%]`}></div>
                   </div>
                   {/* Gold trim lines */}
-                  <div className="absolute inset-1 border border-amber-500/30"></div>
+                  <div className={`absolute inset-1 border ${flagStyle.trim.replace('/50', '/30')}`}></div>
               </div>
             </div>
             
@@ -80,7 +86,7 @@ export default function SLGAllianceMain({ onClose, onOpenMembers }: SLGAllianceM
 
           {/* Name & Level */}
           <div className="text-[#f69147] font-bold text-base mt-2 tracking-widest drop-shadow-md shrink-0">
-            [六] 六六六
+            [{allianceShortName || '六'}] {allianceName || '六六六'}
           </div>
           <div className="text-gray-200 text-[10px] tracking-widest shrink-0">
             1级
