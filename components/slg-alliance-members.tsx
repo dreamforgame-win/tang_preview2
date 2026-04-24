@@ -38,8 +38,13 @@ const MILIT_JOBS = ['统军', '别将', '骠骑', '牙将', '司马', '镇将'];
 export default function SLGAllianceMembers({ onClose, onLeaveAlliance }: SLGAllianceMembersProps) {
   const [view, setView] = useState<'list' | 'assign'>('list');
   const [listTab, setListTab] = useState<'members' | 'groups'>('members');
-  const [groups, setGroups] = useState<{id: string, name: string, leaderId: number | null}[]>([
-  ]);
+  const [groups, setGroups] = useState<{id: string, name: string, leaderId: number | null}[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('slg_groups');
+      if (saved) return JSON.parse(saved);
+    }
+    return [];
+  });
 
   const [members, setMembers] = useState<{
     id: number;
@@ -52,6 +57,10 @@ export default function SLGAllianceMembers({ onClose, onLeaveAlliance }: SLGAlli
     groupId: string | null;
     pos: string;
   }[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('slg_members');
+      if (saved) return JSON.parse(saved);
+    }
     return Array.from({ length: 15 }, (_, i) => {
       return {
         id: i,
@@ -67,9 +76,25 @@ export default function SLGAllianceMembers({ onClose, onLeaveAlliance }: SLGAlli
     });
   });
 
-  const [assignments, setAssignments] = useState<Record<string, number | null>>({
-    master: members[0].id
+  const [assignments, setAssignments] = useState<Record<string, number | null>>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('slg_assignments');
+      if (saved) return JSON.parse(saved);
+    }
+    return { master: 0 };
   });
+
+  useEffect(() => {
+    localStorage.setItem('slg_groups', JSON.stringify(groups));
+  }, [groups]);
+
+  useEffect(() => {
+    localStorage.setItem('slg_members', JSON.stringify(members));
+  }, [members]);
+
+  useEffect(() => {
+    localStorage.setItem('slg_assignments', JSON.stringify(assignments));
+  }, [assignments]);
 
   const getPositionName = (memberId: number) => {
     const entry = Object.entries(assignments).find(([_, id]) => id === memberId);
@@ -145,6 +170,10 @@ export default function SLGAllianceMembers({ onClose, onLeaveAlliance }: SLGAlli
   ]);
 
   const [permissions, setPermissions] = useState<Record<string, Record<string, boolean>>>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('slg_permissions');
+      if (saved) return JSON.parse(saved);
+    }
     const initial: Record<string, Record<string, boolean>> = {};
     ALL_POSITIONS.forEach(pos => {
       initial[pos.id] = {
@@ -158,6 +187,10 @@ export default function SLGAllianceMembers({ onClose, onLeaveAlliance }: SLGAlli
     });
     return initial;
   });
+
+  useEffect(() => {
+    localStorage.setItem('slg_permissions', JSON.stringify(permissions));
+  }, [permissions]);
 
   const togglePermission = (posId: string, permId: string) => {
     if (posId === 'master') return;
@@ -215,6 +248,9 @@ export default function SLGAllianceMembers({ onClose, onLeaveAlliance }: SLGAlli
   const [viewGroupDetails, setViewGroupDetails] = useState<string | null>(null);
   const [manageGroupSearch, setManageGroupSearch] = useState('');
   const [detailGroupSearch, setDetailGroupSearch] = useState('');
+  const [activeActionMenu, setActiveActionMenu] = useState<number | null>(null);
+  const [actionMenuShowGroups, setActionMenuShowGroups] = useState(false);
+  const [kickMemberId, setKickMemberId] = useState<number | null>(null);
 
   const handleCreateGroup = () => {
     if (newGroupName.trim()) {
@@ -391,11 +427,92 @@ export default function SLGAllianceMembers({ onClose, onLeaveAlliance }: SLGAlli
                       <div className="col-span-1 truncate">{m.weekC}</div>
                       <div className="col-span-1 text-green-400 truncate">{m.groupName}</div>
                       <div className="col-span-1 text-green-400 text-xs truncate">{m.pos}</div>
-                      <div className="col-span-1 flex justify-center cursor-pointer">
+                      <div className="col-span-1 flex justify-center cursor-pointer relative">
                         {m.name === '1024' ? (
                           <LogOut size={18} className="text-[#ef4444] hover:text-[#f87171] transition-colors" onClick={() => setShowExitConfirm(true)} />
                         ) : (
-                          <Settings size={18} className="text-gray-400 hover:text-white transition-colors" />
+                          <>
+                            <Settings 
+                              size={18} 
+                              className="text-gray-400 hover:text-white transition-colors" 
+                              onClick={() => {
+                                setActiveActionMenu(activeActionMenu === m.id ? null : m.id);
+                                setActionMenuShowGroups(false);
+                              }}
+                            />
+                            {activeActionMenu === m.id && (
+                              <>
+                                <div className="fixed inset-0 z-40 cursor-default" onClick={() => setActiveActionMenu(null)} />
+                                <div className="absolute right-[calc(100%+8px)] top-1/2 -translate-y-1/2 bg-[#363f4a] border border-gray-500 rounded-sm shadow-xl z-50 flex flex-col w-32 select-none overflow-hidden" onClick={e => e.stopPropagation()}>
+                                  {!actionMenuShowGroups ? (
+                                    <>
+                                      <button className="px-4 py-2 text-sm text-white hover:bg-[#4a5563] text-left transition-colors whitespace-nowrap border-b border-gray-600/50">发起聊天</button>
+                                      <button 
+                                        className="px-4 py-2 text-sm text-[#ef4444] hover:bg-red-500/20 text-left transition-colors whitespace-nowrap border-b border-gray-600/50"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setKickMemberId(m.id);
+                                          setActiveActionMenu(null);
+                                        }}
+                                      >
+                                        移出同盟
+                                      </button>
+                                      {hasPersonnelPerm && (
+                                        <button 
+                                          className="px-4 py-2 text-sm text-white hover:bg-[#4a5563] text-left transition-colors whitespace-nowrap flex justify-between items-center"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActionMenuShowGroups(true);
+                                          }}
+                                        >
+                                          分配分组
+                                          <ChevronRight size={14} className="opacity-70" />
+                                        </button>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div 
+                                        className="px-3 py-2 text-xs text-gray-400 border-b border-gray-500 flex items-center hover:text-white transition-colors cursor-pointer bg-[#2a313a]" 
+                                        onClick={(e) => { e.stopPropagation(); setActionMenuShowGroups(false); }}
+                                      >
+                                        <ChevronLeft size={14} className="mr-1" /> 返回
+                                      </div>
+                                      <div className="max-h-40 overflow-y-auto custom-scrollbar flex flex-col">
+                                        <button 
+                                          className={`px-4 py-2 text-sm text-left transition-colors whitespace-nowrap truncate ${m.groupId === null ? 'text-amber-500' : 'text-white hover:bg-[#4a5563]'}`}
+                                          onClick={(e) => { 
+                                            e.stopPropagation();
+                                            setMembers(prev => prev.map(member => member.id === m.id ? { ...member, groupId: null } : member));
+                                            setGroups(prev => prev.map(g => g.leaderId === m.id ? { ...g, leaderId: null } : g));
+                                            setActiveActionMenu(null);
+                                          }}
+                                        >
+                                          无分组
+                                        </button>
+                                        {groups.map(g => (
+                                          <button
+                                            key={g.id}
+                                            className={`px-4 py-2 text-sm text-left transition-colors whitespace-nowrap truncate ${m.groupId === g.id ? 'text-amber-500' : 'text-white hover:bg-[#4a5563]'}`}
+                                            onClick={(e) => { 
+                                              e.stopPropagation();
+                                              setMembers(prev => prev.map(member => member.id === m.id ? { ...member, groupId: g.id } : member));
+                                              if (m.groupId && m.groupId !== g.id) {
+                                                setGroups(prev => prev.map(group => group.id === m.groupId && group.leaderId === m.id ? { ...group, leaderId: null } : group));
+                                              }
+                                              setActiveActionMenu(null);
+                                            }}
+                                          >
+                                            {g.name}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
@@ -901,6 +1018,46 @@ export default function SLGAllianceMembers({ onClose, onLeaveAlliance }: SLGAlli
                 className="bg-[#f69147] hover:bg-[#ea580c] text-white px-6 py-2 tracking-widest transition-colors rounded-sm"
               >
                 全部同意
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Kick Member Confirm Modal */}
+      {kickMemberId !== null && (
+        <div className="absolute inset-0 z-[130] bg-black/60 flex items-center justify-center p-8">
+          <div className="bg-[#4a5464] w-[400px] flex flex-col shadow-2xl relative border border-[#5c687a]">
+            {/* Header */}
+            <div className="text-center py-4 relative bg-[#4a5464] border-b border-[#363f4a] shrink-0">
+              <div className="text-[#ef4444] text-lg tracking-widest font-bold">移出同盟</div>
+              <button onClick={() => setKickMemberId(null)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 bg-[#536173] p-8 text-center text-white text-base">
+              是否确认将成员 <span className="text-amber-500 font-bold mx-1">{members.find(m => m.id === kickMemberId)?.name}</span> 移出同盟？
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-center gap-6 p-4 bg-[#4a5464] border-t border-[#363f4a] shrink-0">
+              <button 
+                onClick={() => setKickMemberId(null)} 
+                className="bg-[#6b7280] hover:bg-[#4b5563] text-white px-8 py-2 tracking-widest transition-colors rounded-sm"
+              >
+                取消
+              </button>
+              <button 
+                onClick={() => {
+                  setMembers(prev => prev.filter(m => m.id !== kickMemberId));
+                  setGroups(prev => prev.map(g => g.leaderId === kickMemberId ? { ...g, leaderId: null } : g));
+                  setKickMemberId(null);
+                }} 
+                className="bg-[#ef4444] hover:bg-[#dc2626] text-white px-8 py-2 tracking-widest transition-colors rounded-sm"
+              >
+                确认移出
               </button>
             </div>
           </div>
